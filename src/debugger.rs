@@ -1,4 +1,3 @@
-use std::process::Child;
 
 use crate::debugger_command::DebuggerCommand;
 use crate::inferior::{Inferior, Status};
@@ -87,6 +86,14 @@ impl Debugger {
                         },
                         Err(e) => println!("Cannot run child process. Error: {}", e),
                     }
+                },
+                DebuggerCommand::Backtrace=>{
+                    if let None = self.inferior {
+                        println!("No process is currently being run");
+                        continue;
+                    }
+                    let inf = self.inferior.as_mut().unwrap();
+                    inf.print_backtrace();
                 }
             }
         }
