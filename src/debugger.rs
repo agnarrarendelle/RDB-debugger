@@ -64,6 +64,13 @@ impl Debugger {
                     }
                 }
                 DebuggerCommand::Quit => {
+                    if let Some(_) = &self.inferior {
+                        let inf = self.inferior.as_mut().unwrap();
+                        match inf.kill_child() {
+                            Ok(_) => println!("Child {} killed", inf.pid()),
+                            Err(_) => (),
+                        }
+                    }
                     return;
                 }
                 DebuggerCommand::Continue => {
