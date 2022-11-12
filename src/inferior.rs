@@ -82,4 +82,8 @@ impl Inferior {
             other => panic!("waitpid returned unexpected status: {:?}", other),
         })
     }
+
+    pub fn kill_child(&mut self)-> std::io::Result<()>{
+        Child::kill(&mut self.child)
+    }
 }
