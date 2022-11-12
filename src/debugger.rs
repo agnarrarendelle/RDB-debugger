@@ -9,6 +9,7 @@ pub struct Debugger {
     readline: Editor<()>,
     inferior: Option<Inferior>,
     debug_data: DwarfData,
+    breakpoints:Vec<usize>
 }
 
 impl Debugger {
@@ -31,13 +32,14 @@ impl Debugger {
         let mut readline = Editor::<()>::new();
         // Attempt to load history from ~/.deet_history if it exists
         let _ = readline.load_history(&history_path);
-
-        Debugger {
+        let breakpoints = vec![];
+        Debugger {  
             target: target.to_string(),
             history_path,
             readline,
             inferior: None,
             debug_data,
+            breakpoints
         }
     }
 
@@ -124,7 +126,8 @@ impl Debugger {
                 DebuggerCommand::Break(addr)=>{
                     match parse_address(&addr){
                         Some(addr)=>{
-                            println!("break at {}", addr)
+                            println!("Set a breakpoint at {}", addr);
+                            self.breakpoints.push(addr);
                         },
                         None=>println!("Invalid Breakpoint")
                     }
