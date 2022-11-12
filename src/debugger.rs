@@ -1,3 +1,5 @@
+use std::process::Child;
+
 use crate::debugger_command::DebuggerCommand;
 use crate::inferior::{Inferior, Status};
 use rustyline::error::ReadlineError;
@@ -32,6 +34,14 @@ impl Debugger {
         loop {
             match self.get_next_command() {
                 DebuggerCommand::Run(args) => {
+                    if let Some(_) = &self.inferior {
+                        let inf = self.inferior.as_mut().unwrap();
+                        match inf.kill_child() {
+                            Ok(_) => println!("Child {} killed", inf.pid()),
+                            Err(e) => panic!("Cannot kill child. Error: {}", e),
+                        }
+                    }
+
                     if let Some(inferior) = Inferior::new(&self.target, &args) {
                         // Create the inferior
                         self.inferior = Some(inferior);
@@ -39,37 +49,37 @@ impl Debugger {
                         // You may use self.inferior.as_mut().unwrap() to get a mutable reference
                         // to the Inferior object
                         let inf = self.inferior.as_mut().unwrap();
-                        match inf.cont(){
-                            Ok(s)=>{
-                                match s{
-                                    Status::Exited(code)=>println!("Child existed (status {})", code),
-                                    Status::Stopped(sig, _)=>println!("Child stopped (signal: {})", sig),
-                                    Status::Signaled(_)=>todo!()
-                            }},
-                            Err(e)=>panic!("Cannot run child process. Error: {}",e)
-                        }                        
+                        match inf.cont() {
+                            Ok(s) => match s {
+                                Status::Exited(code) => println!("Child existed (status {})", code),
+                                Status::Stopped(sig, _) => {
+                                    println!("Child stopped (signal: {})", sig)
+                                }
+                                Status::Signaled(_) => todo!(),
+                            },
+                            Err(e) => panic!("Cannot run child process. Error: {}", e),
+                        }
                     } else {
                         println!("Error starting subprocess");
                     }
                 }
                 DebuggerCommand::Quit => {
                     return;
-                },
-                DebuggerCommand::Continue=>{
-                    if let None = self.inferior{
+                }
+                DebuggerCommand::Continue => {
+                    if let None = self.inferior {
                         println!("No process is currently being run");
                         continue;
                     }
                     let inf = self.inferior.as_mut().unwrap();
-                    match inf.cont(){
-                        Ok(s)=>{
-                            match s{
-                                Status::Exited(code)=>println!("Child existed (status {})", code),
-                                Status::Stopped(sig, _)=>println!("Child stopped (signal: {})", sig),
-                                Status::Signaled(_)=>todo!()
-                        }},
-                        Err(e)=>println!("Cannot run child process. Error: {}",e)
-                    }                       
+                    match inf.cont() {
+                        Ok(s) => match s {
+                            Status::Exited(code) => println!("Child existed (status {})", code),
+                            Status::Stopped(sig, _) => println!("Child stopped (signal: {})", sig),
+                            Status::Signaled(_) => todo!(),
+                        },
+                        Err(e) => println!("Cannot run child process. Error: {}", e),
+                    }
                 }
             }
         }
