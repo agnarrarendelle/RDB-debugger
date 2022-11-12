@@ -1,15 +1,14 @@
-
 use crate::debugger_command::DebuggerCommand;
+use crate::dwarf_data::{DwarfData, Error as DwarfError};
 use crate::inferior::{Inferior, Status};
 use rustyline::error::ReadlineError;
 use rustyline::Editor;
-use crate::dwarf_data::{DwarfData, Error as DwarfError};
 pub struct Debugger {
     target: String,
     history_path: String,
     readline: Editor<()>,
     inferior: Option<Inferior>,
-    debug_data:DwarfData
+    debug_data: DwarfData,
 }
 
 impl Debugger {
@@ -38,7 +37,7 @@ impl Debugger {
             history_path,
             readline,
             inferior: None,
-            debug_data
+            debug_data,
         }
     }
 
@@ -64,8 +63,13 @@ impl Debugger {
                         match inf.cont() {
                             Ok(s) => match s {
                                 Status::Exited(code) => println!("Child existed (status {})", code),
-                                Status::Stopped(sig, _) => {
-                                    println!("Child stopped (signal: {})", sig)
+                                Status::Stopped(sig, rip) => {
+                                    println!("Child stopped (signal: {})", sig);
+                                    if let Some(line) =
+                                        DwarfData::get_line_from_addr(&self.debug_data, rip)
+                                    {
+                                        println!("Stopped at {}", line);
+                                    }
                                 }
                                 Status::Signaled(_) => todo!(),
                             },
@@ -94,19 +98,26 @@ impl Debugger {
                     match inf.cont() {
                         Ok(s) => match s {
                             Status::Exited(code) => println!("Child existed (status {})", code),
-                            Status::Stopped(sig, _) => println!("Child stopped (signal: {})", sig),
+                            Status::Stopped(sig, rip) => {
+                                println!("Child stopped (signal: {})", sig);
+                                if let Some(line) =
+                                    DwarfData::get_line_from_addr(&self.debug_data, rip)
+                                {
+                                    println!("Stopped at {}", line);
+                                }
+                            }
                             Status::Signaled(_) => todo!(),
                         },
                         Err(e) => println!("Cannot run child process. Error: {}", e),
                     }
-                },
-                DebuggerCommand::Backtrace=>{
+                }
+                DebuggerCommand::Backtrace => {
                     if let None = self.inferior {
                         println!("No process is currently being run");
                         continue;
                     }
                     let inf = self.inferior.as_mut().unwrap();
-                    if let Err(e)= inf.print_backtrace(&self.debug_data){
+                    if let Err(e) = inf.print_backtrace(&self.debug_data) {
                         println!("Cannot print backtrace. Error: {}", e);
                     }
                 }
