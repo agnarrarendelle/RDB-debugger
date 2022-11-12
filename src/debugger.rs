@@ -106,7 +106,9 @@ impl Debugger {
                         continue;
                     }
                     let inf = self.inferior.as_mut().unwrap();
-                    inf.print_backtrace();
+                    if let Err(e)= inf.print_backtrace(&self.debug_data){
+                        println!("Cannot print backtrace. Error: {}", e);
+                    }
                 }
             }
         }
