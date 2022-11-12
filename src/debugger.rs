@@ -43,7 +43,7 @@ impl Debugger {
                             Ok(s)=>{
                                 match s{
                                     Status::Exited(code)=>println!("Child existed (status {})", code),
-                                    Status::Stopped(..)=>println!("Child stopped"),
+                                    Status::Stopped(sig, _)=>println!("Child stopped (signal: {})", sig),
                                     Status::Signaled(_)=>todo!()
                             }},
                             Err(e)=>panic!("Cannot run child process. Error: {}",e)
@@ -54,6 +54,22 @@ impl Debugger {
                 }
                 DebuggerCommand::Quit => {
                     return;
+                },
+                DebuggerCommand::Continue=>{
+                    if let None = self.inferior{
+                        println!("No process is currently being run");
+                        continue;
+                    }
+                    let inf = self.inferior.as_mut().unwrap();
+                    match inf.cont(){
+                        Ok(s)=>{
+                            match s{
+                                Status::Exited(code)=>println!("Child existed (status {})", code),
+                                Status::Stopped(sig, _)=>println!("Child stopped (signal: {})", sig),
+                                Status::Signaled(_)=>todo!()
+                        }},
+                        Err(e)=>println!("Cannot run child process. Error: {}",e)
+                    }                       
                 }
             }
         }
