@@ -120,6 +120,14 @@ impl Debugger {
                     if let Err(e) = inf.print_backtrace(&self.debug_data) {
                         println!("Cannot print backtrace. Error: {}", e);
                     }
+                },
+                DebuggerCommand::Break(addr)=>{
+                    match parse_address(&addr){
+                        Some(addr)=>{
+                            println!("break at {}", addr)
+                        },
+                        None=>println!("Invalid Breakpoint")
+                    }
                 }
             }
         }
@@ -165,4 +173,13 @@ impl Debugger {
             }
         }
     }
+}
+
+fn parse_address(addr: &str) -> Option<usize> {
+    let addr_without_0x = if addr.to_lowercase().starts_with("*0x") {
+        &addr[3..]
+    } else {
+        &addr
+    };
+    usize::from_str_radix(addr_without_0x, 16).ok()
 }
