@@ -83,7 +83,10 @@ impl Inferior {
         })
     }
 
-    pub fn kill_child(&mut self)-> std::io::Result<()>{
-        Child::kill(&mut self.child)
+    pub fn kill_child(&mut self)-> Result<std::process::ExitStatus, std::io::Error>{
+        match Child::kill(&mut self.child){
+            Ok(_)=>Child::wait(&mut self.child),
+            Err(e)=>Err(e)
+        }
     }
 }
