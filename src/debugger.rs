@@ -9,7 +9,7 @@ pub struct Debugger {
     readline: Editor<()>,
     inferior: Option<Inferior>,
     debug_data: DwarfData,
-    breakpoints:Vec<usize>
+    breakpoints: Vec<usize>,
 }
 
 impl Debugger {
@@ -27,19 +27,19 @@ impl Debugger {
                 std::process::exit(1);
             }
         };
-
+        debug_data.print();
         let history_path = format!("{}/.deet_history", std::env::var("HOME").unwrap());
         let mut readline = Editor::<()>::new();
         // Attempt to load history from ~/.deet_history if it exists
         let _ = readline.load_history(&history_path);
         let breakpoints = vec![];
-        Debugger {  
+        Debugger {
             target: target.to_string(),
             history_path,
             readline,
             inferior: None,
             debug_data,
-            breakpoints
+            breakpoints,
         }
     }
 
@@ -51,11 +51,11 @@ impl Debugger {
                         let inf = self.inferior.as_mut().unwrap();
                         match inf.kill_child() {
                             Ok(_) => println!("Child {} killed", inf.pid()),
-                            Err(e) => panic!("Cannot kill child. Error: {}", e),
+                            Err(_) => println!("No chlld to be killed"),
                         }
                     }
 
-                    if let Some(inferior) = Inferior::new(&self.target, &args) {
+                    if let Some(inferior) = Inferior::new(&self.target, &args, &self.breakpoints) {
                         // Create the inferior
                         self.inferior = Some(inferior);
                         // TODO (milestone 1): make the inferior run
@@ -122,16 +122,26 @@ impl Debugger {
                     if let Err(e) = inf.print_backtrace(&self.debug_data) {
                         println!("Cannot print backtrace. Error: {}", e);
                     }
-                },
-                DebuggerCommand::Break(addr)=>{
-                    match parse_address(&addr){
-                        Some(addr)=>{
-                            println!("Set a breakpoint at {}", addr);
-                            self.breakpoints.push(addr);
-                        },
-                        None=>println!("Invalid Breakpoint")
-                    }
                 }
+                DebuggerCommand::Break(addr) => match parse_address(&addr) {
+                    Some(parsed_addr) => {
+                        let addr = &addr[1..];
+                        if self.inferior.is_some() {
+                            let inf = self.inferior.as_mut().unwrap();
+                            match inf.write_byte(parsed_addr, 0xcc) {
+                                Ok(_) => {
+                                    println!("Set breakpoint while stopped");
+                                    self.breakpoints.push(parsed_addr);
+                                },
+                                Err(_)=>println!("Cannot set breakpoint at {}",addr)
+                            }
+                        } else {
+                            println!("Set a breakpoint at {}", addr);
+                            self.breakpoints.push(parsed_addr);
+                        }
+                    }
+                    None => println!("Invalid Breakpoint"),
+                },
             }
         }
     }
