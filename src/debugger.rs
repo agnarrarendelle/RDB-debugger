@@ -1,10 +1,11 @@
-use std::collections::HashMap;
-
 use crate::debugger_command::DebuggerCommand;
 use crate::dwarf_data::{DwarfData, Error as DwarfError};
 use crate::inferior::{Inferior, Status};
 use rustyline::error::ReadlineError;
 use rustyline::Editor;
+use std::collections::HashMap;
+use std::fs::{self, File};
+use std::io::{BufReader, BufRead};
 
 #[derive(Clone)]
 pub struct Breakpoint {
@@ -13,6 +14,7 @@ pub struct Breakpoint {
 }
 pub struct Debugger {
     target: String,
+    target_lines: Vec<String>,
     history_path: String,
     readline: Editor<()>,
     inferior: Option<Inferior>,
@@ -35,6 +37,7 @@ impl Debugger {
                 std::process::exit(1);
             }
         };
+        let target_lines=get_file_lines(&format!("{}.c", target));
         debug_data.print();
         let history_path = format!("{}/.deet_history", std::env::var("HOME").unwrap());
         let mut readline = Editor::<()>::new();
@@ -48,6 +51,7 @@ impl Debugger {
             inferior: None,
             debug_data,
             breakpoints,
+            target_lines,
         }
     }
 
@@ -63,7 +67,9 @@ impl Debugger {
                         }
                     }
 
-                    if let Some(inferior) = Inferior::new(&self.target, &args, &mut self.breakpoints) {
+                    if let Some(inferior) =
+                        Inferior::new(&self.target, &args, &mut self.breakpoints)
+                    {
                         // Create the inferior
                         self.inferior = Some(inferior);
                         // TODO (milestone 1): make the inferior run
@@ -79,9 +85,13 @@ impl Debugger {
                                         DwarfData::get_line_from_addr(&self.debug_data, rip)
                                     {
                                         println!("Stopped at {}", line);
+                                        self.print_nearby_line(line.number);
+
                                     }
                                 }
-                                Status::Signaled(sig) => println!("Program stopped due to signal {}", sig),
+                                Status::Signaled(sig) => {
+                                    println!("Program stopped due to signal {}", sig)
+                                }
                             },
                             Err(e) => panic!("Cannot run child process. Error: {}", e),
                         }
@@ -114,9 +124,12 @@ impl Debugger {
                                     DwarfData::get_line_from_addr(&self.debug_data, rip)
                                 {
                                     println!("Stopped at {}", line);
+                                    self.print_nearby_line(line.number);
                                 }
                             }
-                            Status::Signaled(sig)  => println!("Program stopped due to signal {}", sig),
+                            Status::Signaled(sig) => {
+                                println!("Program stopped due to signal {}", sig)
+                            }
                         },
                         Err(e) => println!("Cannot run child process. Error: {}", e),
                     }
@@ -144,13 +157,25 @@ impl Debugger {
                         match inf.write_byte(parsed_addr, 0xcc) {
                             Ok(orig_byte) => {
                                 println!("Set breakpoint at {} while stopped", addr);
-                                self.breakpoints.insert(parsed_addr, Breakpoint { addr: parsed_addr, orig_byte});
+                                self.breakpoints.insert(
+                                    parsed_addr,
+                                    Breakpoint {
+                                        addr: parsed_addr,
+                                        orig_byte,
+                                    },
+                                );
                             }
                             Err(_) => println!("Cannot set breakpoint at {}", addr),
                         }
                     } else {
                         println!("Set a breakpoint at {}", addr);
-                        self.breakpoints.insert(parsed_addr, Breakpoint { addr: parsed_addr, orig_byte:0});
+                        self.breakpoints.insert(
+                            parsed_addr,
+                            Breakpoint {
+                                addr: parsed_addr,
+                                orig_byte: 0,
+                            },
+                        );
                     }
                     // Some(parsed_addr) => {
                     //     let addr = &addr[1..];
@@ -223,14 +248,35 @@ impl Debugger {
         // };
         // usize::from_str_radix(addr_without_0x, 16).ok()
         if addr.to_lowercase().starts_with("*0x") {
-            return usize::from_str_radix(&addr[3..], 16).ok()
-        }else if addr.parse::<usize>().is_ok() {
-            return  self.debug_data.get_addr_for_line(None, addr.parse::<usize>().unwrap());
-        }else{
-            return  self.debug_data.get_addr_for_function(None, addr.trim());
+            return usize::from_str_radix(&addr[3..], 16).ok();
+        } else if addr.parse::<usize>().is_ok() {
+            return self
+                .debug_data
+                .get_addr_for_line(None, addr.parse::<usize>().unwrap());
+        } else {
+            return self.debug_data.get_addr_for_function(None, addr.trim());
         }
-    
     }
+    fn print_nearby_line(&self, line_num:usize){
+        println!("nearby lines-------");
+        let line_nums = [line_num-1, line_num, line_num+1];
+        for l in line_nums{
+            
+            if let Some(line) = self.target_lines.get(l){
+                println!("{}", line)
+            }
+        }
+    }
+
 }
 
+fn get_file_lines(target:&str)->Vec<String>{
+    let file = File::open(target).expect(&format!("Cannot read lines in file {}", target));
+    let reader = BufReader::new(file);
+    let mut lines = vec![];
+    for  line in reader.lines() {
+        lines.push(line.expect(&format!("Cannot read lines in file {}", target)));
+    }
 
+    lines
+}
