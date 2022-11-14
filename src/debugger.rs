@@ -132,7 +132,7 @@ impl Debugger {
                     }
                 }
                 DebuggerCommand::Break(addr) => {
-                    let parsed_addr = parse_address(&addr);
+                    let parsed_addr = self.parse_address(&addr);
                     if let None = parsed_addr {
                         println!("Invalid breakpoint address");
                         continue;
@@ -214,13 +214,23 @@ impl Debugger {
             }
         }
     }
+
+    fn parse_address(&self, addr: &str) -> Option<usize> {
+        // let addr_without_0x = if addr.to_lowercase().starts_with("*0x") {
+        //     &addr[3..]
+        // } else {
+        //     &addr
+        // };
+        // usize::from_str_radix(addr_without_0x, 16).ok()
+        if addr.to_lowercase().starts_with("*0x") {
+            return usize::from_str_radix(&addr[3..], 16).ok()
+        }else if addr.parse::<usize>().is_ok() {
+            return  self.debug_data.get_addr_for_line(None, addr.parse::<usize>().unwrap());
+        }else{
+            return  self.debug_data.get_addr_for_function(None, addr.trim());
+        }
+    
+    }
 }
 
-fn parse_address(addr: &str) -> Option<usize> {
-    let addr_without_0x = if addr.to_lowercase().starts_with("*0x") {
-        &addr[3..]
-    } else {
-        &addr
-    };
-    usize::from_str_radix(addr_without_0x, 16).ok()
-}
+
