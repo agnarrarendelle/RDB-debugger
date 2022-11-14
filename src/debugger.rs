@@ -1,15 +1,23 @@
+use std::collections::HashMap;
+
 use crate::debugger_command::DebuggerCommand;
 use crate::dwarf_data::{DwarfData, Error as DwarfError};
 use crate::inferior::{Inferior, Status};
 use rustyline::error::ReadlineError;
 use rustyline::Editor;
+
+#[derive(Clone)]
+pub struct Breakpoint {
+    pub addr: usize,
+    pub orig_byte: u8,
+}
 pub struct Debugger {
     target: String,
     history_path: String,
     readline: Editor<()>,
     inferior: Option<Inferior>,
     debug_data: DwarfData,
-    breakpoints: Vec<usize>,
+    breakpoints: HashMap<usize, Breakpoint>,
 }
 
 impl Debugger {
@@ -32,7 +40,7 @@ impl Debugger {
         let mut readline = Editor::<()>::new();
         // Attempt to load history from ~/.deet_history if it exists
         let _ = readline.load_history(&history_path);
-        let breakpoints = vec![];
+        let breakpoints = HashMap::new();
         Debugger {
             target: target.to_string(),
             history_path,
@@ -55,7 +63,7 @@ impl Debugger {
                         }
                     }
 
-                    if let Some(inferior) = Inferior::new(&self.target, &args, &self.breakpoints) {
+                    if let Some(inferior) = Inferior::new(&self.target, &args, &mut self.breakpoints) {
                         // Create the inferior
                         self.inferior = Some(inferior);
                         // TODO (milestone 1): make the inferior run
@@ -123,25 +131,45 @@ impl Debugger {
                         println!("Cannot print backtrace. Error: {}", e);
                     }
                 }
-                DebuggerCommand::Break(addr) => match parse_address(&addr) {
-                    Some(parsed_addr) => {
-                        let addr = &addr[1..];
-                        if self.inferior.is_some() {
-                            let inf = self.inferior.as_mut().unwrap();
-                            match inf.write_byte(parsed_addr, 0xcc) {
-                                Ok(_) => {
-                                    println!("Set breakpoint while stopped");
-                                    self.breakpoints.push(parsed_addr);
-                                },
-                                Err(_)=>println!("Cannot set breakpoint at {}",addr)
-                            }
-                        } else {
-                            println!("Set a breakpoint at {}", addr);
-                            self.breakpoints.push(parsed_addr);
-                        }
+                DebuggerCommand::Break(addr) => {
+                    let parsed_addr = parse_address(&addr);
+                    if let None = parsed_addr {
+                        println!("Invalid breakpoint address");
+                        continue;
                     }
-                    None => println!("Invalid Breakpoint"),
-                },
+
+                    let parsed_addr = parsed_addr.unwrap();
+                    if self.inferior.is_some() {
+                        let inf = self.inferior.as_mut().unwrap();
+                        match inf.write_byte(parsed_addr, 0xcc) {
+                            Ok(orig_byte) => {
+                                println!("Set breakpoint at {} while stopped", addr);
+                                self.breakpoints.insert(parsed_addr, Breakpoint { addr: parsed_addr, orig_byte});
+                            }
+                            Err(_) => println!("Cannot set breakpoint at {}", addr),
+                        }
+                    } else {
+                        println!("Set a breakpoint at {}", addr);
+                        self.breakpoints.insert(parsed_addr, Breakpoint { addr: parsed_addr, orig_byte:0});
+                    }
+                    // Some(parsed_addr) => {
+                    //     let addr = &addr[1..];
+                    //     if self.inferior.is_some() {
+                    //         let inf = self.inferior.as_mut().unwrap();
+                    //         match inf.write_byte(parsed_addr, 0xcc) {
+                    //             Ok(_) => {
+                    //                 println!("Set breakpoint while stopped");
+                    //                 self.breakpoints.push(parsed_addr);
+                    //             },
+                    //             Err(_)=>println!("Cannot set breakpoint at {}",addr)
+                    //         }
+                    //     } else {
+                    //         println!("Set a breakpoint at {}", addr);
+                    //         self.breakpoints.push(parsed_addr);
+                    //     }
+                    // }
+                    // None => println!("Invalid Breakpoint"),
+                }
             }
         }
     }
