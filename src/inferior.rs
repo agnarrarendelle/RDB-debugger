@@ -1,13 +1,15 @@
+use crate::debugger::Breakpoint;
+use crate::dwarf_data::DwarfData;
 use nix::sys::ptrace;
 use nix::sys::signal;
 use nix::sys::signal::Signal::SIGCONT;
 use nix::sys::wait::{waitpid, WaitPidFlag, WaitStatus};
 use nix::unistd::Pid;
+use std::collections::HashMap;
+use std::mem::size_of;
 use std::os::unix::process::CommandExt;
 use std::process::Child;
 use std::process::Command;
-use crate::dwarf_data::{DwarfData};
-use std::mem::size_of;
 
 pub enum Status {
     /// Indicates inferior stopped. Contains the signal that stopped the process, as well as the
@@ -42,7 +44,11 @@ pub struct Inferior {
 impl Inferior {
     /// Attempts to start a new inferior process. Returns Some(Inferior) if successful, or None if
     /// an error is encountered.
-    pub fn new(target: &str, args: &Vec<String>, breakpoints:&[usize]) -> Option<Inferior> {
+    pub fn new(
+        target: &str,
+        args: &Vec<String>,
+        breakpoints: &mut HashMap<usize, Breakpoint>,
+    ) -> Option<Inferior> {
         let mut cmd = Command::new(target);
         cmd.args(args);
         unsafe {
@@ -54,25 +60,33 @@ impl Inferior {
         };
 
         let status = inferior.wait(None).ok()?;
-        if let Status::Stopped(signal, _rip) = status{
-            if let signal::Signal::SIGTRAP = signal{
-                for b in breakpoints{
-                    if inferior.write_byte(*b, 0xcc).is_err(){
-                        println!("cannot set breakpoints at {}", b)
+        if let Status::Stopped(signal, _rip) = status {
+            if let signal::Signal::SIGTRAP = signal {
+                let brks = breakpoints.clone();
+                for b in brks.keys() {
+                    match inferior.write_byte(*b, 0xcc) {
+                        Ok(orig_instr)=>{
+                            breakpoints.get_mut(&b).unwrap().orig_byte = orig_instr;
+
+                        },
+                        Err(e)=>{
+                            println!("cannot set breakpoints at {}. Error: {}", b, e)
+                        }
                     }
                 }
-                return  Some(inferior);
+
+                
+                return Some(inferior);
             }
         }
 
         None
     }
 
-    pub fn cont(&self)->Result<Status, nix::Error>{
-        match ptrace::cont(self.pid(), SIGCONT){
-            Ok(_)=>self.wait(None),
-            Err(e)=>Err(e)
-            
+    pub fn cont(&self) -> Result<Status, nix::Error> {
+        match ptrace::cont(self.pid(), SIGCONT) {
+            Ok(_) => self.wait(None),
+            Err(e) => Err(e),
         }
     }
 
@@ -95,33 +109,33 @@ impl Inferior {
         })
     }
 
-    pub fn kill_child(&mut self)-> Result<std::process::ExitStatus, std::io::Error>{
-        match Child::kill(&mut self.child){
-            Ok(_)=>Child::wait(&mut self.child),
-            Err(e)=>Err(e)
+    pub fn kill_child(&mut self) -> Result<std::process::ExitStatus, std::io::Error> {
+        match Child::kill(&mut self.child) {
+            Ok(_) => Child::wait(&mut self.child),
+            Err(e) => Err(e),
         }
     }
 
-    pub fn print_backtrace(&self, debug_data:&DwarfData) -> Result<(), nix::Error>{
+    pub fn print_backtrace(&self, debug_data: &DwarfData) -> Result<(), nix::Error> {
         let registers = ptrace::getregs(self.pid())?;
         let mut instruction_ptr = registers.rip as usize;
         let mut base_ptr = registers.rbp as usize;
-        loop{
-            let addr =DwarfData::get_line_from_addr(debug_data, instruction_ptr ).unwrap();
-            let func_name = DwarfData::get_function_from_addr(debug_data, instruction_ptr ).unwrap();
+        loop {
+            let addr = DwarfData::get_line_from_addr(debug_data, instruction_ptr).unwrap();
+            let func_name = DwarfData::get_function_from_addr(debug_data, instruction_ptr).unwrap();
             println!("at fucntion: {}. In {}", func_name, addr);
-            if func_name == "main"{
+            if func_name == "main" {
                 break;
             }
 
-            instruction_ptr = ptrace::read(self.pid(), (base_ptr + 8) as ptrace::AddressType)? as usize;
-            base_ptr = ptrace::read(self.pid(), base_ptr  as ptrace::AddressType)? as usize;
+            instruction_ptr =
+                ptrace::read(self.pid(), (base_ptr + 8) as ptrace::AddressType)? as usize;
+            base_ptr = ptrace::read(self.pid(), base_ptr as ptrace::AddressType)? as usize;
         }
 
         // println!("at fucntion: {}. In {}", func_name, addr);
 
         Ok(())
-           
     }
 
     pub fn write_byte(&mut self, addr: usize, val: u8) -> Result<u8, nix::Error> {
