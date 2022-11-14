@@ -70,7 +70,7 @@ impl Debugger {
                         // You may use self.inferior.as_mut().unwrap() to get a mutable reference
                         // to the Inferior object
                         let inf = self.inferior.as_mut().unwrap();
-                        match inf.cont() {
+                        match inf.cont(&self.breakpoints) {
                             Ok(s) => match s {
                                 Status::Exited(code) => println!("Child existed (status {})", code),
                                 Status::Stopped(sig, rip) => {
@@ -81,7 +81,7 @@ impl Debugger {
                                         println!("Stopped at {}", line);
                                     }
                                 }
-                                Status::Signaled(_) => todo!(),
+                                Status::Signaled(sig) => println!("Program stopped due to signal {}", sig),
                             },
                             Err(e) => panic!("Cannot run child process. Error: {}", e),
                         }
@@ -105,7 +105,7 @@ impl Debugger {
                         continue;
                     }
                     let inf = self.inferior.as_mut().unwrap();
-                    match inf.cont() {
+                    match inf.cont(&self.breakpoints) {
                         Ok(s) => match s {
                             Status::Exited(code) => println!("Child existed (status {})", code),
                             Status::Stopped(sig, rip) => {
@@ -116,7 +116,7 @@ impl Debugger {
                                     println!("Stopped at {}", line);
                                 }
                             }
-                            Status::Signaled(_) => todo!(),
+                            Status::Signaled(sig)  => println!("Program stopped due to signal {}", sig),
                         },
                         Err(e) => println!("Cannot run child process. Error: {}", e),
                     }

@@ -83,7 +83,22 @@ impl Inferior {
         None
     }
 
-    pub fn cont(&self) -> Result<Status, nix::Error> {
+    pub fn cont(&mut self, breakpoints: &HashMap<usize, Breakpoint>) -> Result<Status, nix::Error> {
+        let mut registers = ptrace::getregs(self.pid())?;
+        let rip = registers.rip as usize;
+        let interrupted_instru_addr = rip-1;
+        if let Some(breakpoint) = breakpoints.get(&interrupted_instru_addr){
+            self.write_byte(breakpoint.addr, breakpoint.orig_byte)?;
+
+            registers.rip = interrupted_instru_addr as u64;
+            ptrace::setregs(self.pid(), registers)?;
+
+            ptrace::step(self.pid(), None)?;
+
+            self.wait(None)?;
+
+        }
+
         match ptrace::cont(self.pid(), SIGCONT) {
             Ok(_) => self.wait(None),
             Err(e) => Err(e),
