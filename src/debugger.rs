@@ -5,7 +5,7 @@ use rustyline::error::ReadlineError;
 use rustyline::Editor;
 use std::collections::HashMap;
 use std::fs::{self, File};
-use std::io::{BufReader, BufRead};
+use std::io::{BufRead, BufReader};
 
 #[derive(Clone)]
 pub struct Breakpoint {
@@ -37,7 +37,7 @@ impl Debugger {
                 std::process::exit(1);
             }
         };
-        let target_lines=get_file_lines(&format!("{}.c", target));
+        let target_lines = get_file_lines(&format!("{}.c", target));
         debug_data.print();
         let history_path = format!("{}/.deet_history", std::env::var("HOME").unwrap());
         let mut readline = Editor::<()>::new();
@@ -81,12 +81,13 @@ impl Debugger {
                                 Status::Exited(code) => println!("Child existed (status {})", code),
                                 Status::Stopped(sig, rip) => {
                                     println!("Child stopped (signal: {})", sig);
-                                    if let Some(line) =
-                                        DwarfData::get_line_from_addr(&self.debug_data, rip)
-                                    {
+                                    if let (Some(line), Some(func_name)) = (
+                                        DwarfData::get_line_from_addr(&self.debug_data, rip),
+                                        DwarfData::get_function_from_addr(&self.debug_data, rip),
+                                    ) {
                                         println!("Stopped at {}", line);
+                                        println!("Inside function {}", func_name);
                                         self.print_nearby_line(line.number);
-
                                     }
                                 }
                                 Status::Signaled(sig) => {
@@ -120,10 +121,12 @@ impl Debugger {
                             Status::Exited(code) => println!("Child existed (status {})", code),
                             Status::Stopped(sig, rip) => {
                                 println!("Child stopped (signal: {})", sig);
-                                if let Some(line) =
-                                    DwarfData::get_line_from_addr(&self.debug_data, rip)
-                                {
+                                if let (Some(line), Some(func_name)) = (
+                                    DwarfData::get_line_from_addr(&self.debug_data, rip),
+                                    DwarfData::get_function_from_addr(&self.debug_data, rip),
+                                ) {
                                     println!("Stopped at {}", line);
+                                    println!("Inside function {}", func_name);
                                     self.print_nearby_line(line.number);
                                 }
                             }
@@ -257,24 +260,22 @@ impl Debugger {
             return self.debug_data.get_addr_for_function(None, addr.trim());
         }
     }
-    fn print_nearby_line(&self, line_num:usize){
+    fn print_nearby_line(&self, line_num: usize) {
         println!("nearby lines-------");
-        let line_nums = [line_num-1, line_num, line_num+1];
-        for l in line_nums{
-            
-            if let Some(line) = self.target_lines.get(l){
+        let line_nums = [line_num - 1, line_num, line_num + 1];
+        for l in line_nums {
+            if let Some(line) = self.target_lines.get(l) {
                 println!("{}", line)
             }
         }
     }
-
 }
 
-fn get_file_lines(target:&str)->Vec<String>{
+fn get_file_lines(target: &str) -> Vec<String> {
     let file = File::open(target).expect(&format!("Cannot read lines in file {}", target));
     let reader = BufReader::new(file);
     let mut lines = vec![];
-    for  line in reader.lines() {
+    for line in reader.lines() {
         lines.push(line.expect(&format!("Cannot read lines in file {}", target)));
     }
 
