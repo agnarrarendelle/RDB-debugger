@@ -111,6 +111,26 @@ impl DwarfData {
         Some(frame.function?.raw_name().ok()?.to_string())
     }
 
+    pub fn print_local_variable_from_func(&self, filename: Option<&str>, func_name: &str) {
+        let mut file_target = &self.files[0];
+
+        if let Some(target) = filename{
+            let file = self.get_target_file(target).unwrap();
+            file_target = file;
+        }
+        match file_target.functions.iter().find(|f| f.name == func_name){
+            Some(func)=>{
+                for var in &func.variables{
+                    println!(
+                        "    * Variable: {} ({}, located at {}, declared at line {})",
+                        var.name, var.entity_type.name, var.location, var.line_number
+                    );
+                }
+            },
+            None=>println!("Cannot find function {}", func_name)
+        }
+    }
+
     #[allow(dead_code)]
     pub fn print(&self) {
         for file in &self.files {
@@ -210,6 +230,7 @@ pub struct File {
     pub lines: Vec<Line>,
 }
 
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct Line {
     pub file: String,
@@ -222,5 +243,3 @@ impl fmt::Display for Line {
         write!(f, "{}:{}", self.file, self.number)
     }
 }
-
-
