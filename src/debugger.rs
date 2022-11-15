@@ -77,23 +77,7 @@ impl Debugger {
                         // to the Inferior object
                         let inf = self.inferior.as_mut().unwrap();
                         match inf.cont(&self.breakpoints) {
-                            Ok(s) => match s {
-                                Status::Exited(code) => println!("Child existed (status {})", code),
-                                Status::Stopped(sig, rip) => {
-                                    println!("Child stopped (signal: {})", sig);
-                                    if let (Some(line), Some(func_name)) = (
-                                        DwarfData::get_line_from_addr(&self.debug_data, rip),
-                                        DwarfData::get_function_from_addr(&self.debug_data, rip),
-                                    ) {
-                                        println!("Stopped at {}", line);
-                                        println!("Inside function {}", func_name);
-                                        self.print_nearby_line(line.number);
-                                    }
-                                }
-                                Status::Signaled(sig) => {
-                                    println!("Program stopped due to signal {}", sig)
-                                }
-                            },
+                            Ok(s) => self.print_child_status(s),
                             Err(e) => panic!("Cannot run child process. Error: {}", e),
                         }
                     } else {
@@ -117,23 +101,7 @@ impl Debugger {
                     }
                     let inf = self.inferior.as_mut().unwrap();
                     match inf.cont(&self.breakpoints) {
-                        Ok(s) => match s {
-                            Status::Exited(code) => println!("Child existed (status {})", code),
-                            Status::Stopped(sig, rip) => {
-                                println!("Child stopped (signal: {})", sig);
-                                if let (Some(line), Some(func_name)) = (
-                                    DwarfData::get_line_from_addr(&self.debug_data, rip),
-                                    DwarfData::get_function_from_addr(&self.debug_data, rip),
-                                ) {
-                                    println!("Stopped at {}", line);
-                                    println!("Inside function {}", func_name);
-                                    self.print_nearby_line(line.number);
-                                }
-                            }
-                            Status::Signaled(sig) => {
-                                println!("Program stopped due to signal {}", sig)
-                            }
-                        },
+                        Ok(s) => self.print_child_status(s),
                         Err(e) => println!("Cannot run child process. Error: {}", e),
                     }
                 }
@@ -180,23 +148,6 @@ impl Debugger {
                             },
                         );
                     }
-                    // Some(parsed_addr) => {
-                    //     let addr = &addr[1..];
-                    //     if self.inferior.is_some() {
-                    //         let inf = self.inferior.as_mut().unwrap();
-                    //         match inf.write_byte(parsed_addr, 0xcc) {
-                    //             Ok(_) => {
-                    //                 println!("Set breakpoint while stopped");
-                    //                 self.breakpoints.push(parsed_addr);
-                    //             },
-                    //             Err(_)=>println!("Cannot set breakpoint at {}",addr)
-                    //         }
-                    //     } else {
-                    //         println!("Set a breakpoint at {}", addr);
-                    //         self.breakpoints.push(parsed_addr);
-                    //     }
-                    // }
-                    // None => println!("Invalid Breakpoint"),
                 }
             }
         }
@@ -244,12 +195,6 @@ impl Debugger {
     }
 
     fn parse_address(&self, addr: &str) -> Option<usize> {
-        // let addr_without_0x = if addr.to_lowercase().starts_with("*0x") {
-        //     &addr[3..]
-        // } else {
-        //     &addr
-        // };
-        // usize::from_str_radix(addr_without_0x, 16).ok()
         if addr.to_lowercase().starts_with("*0x") {
             return usize::from_str_radix(&addr[3..], 16).ok();
         } else if addr.parse::<usize>().is_ok() {
@@ -266,6 +211,28 @@ impl Debugger {
         for l in line_nums {
             if let Some(line) = self.target_lines.get(l) {
                 println!("{}", line)
+            }
+        }
+    }
+
+    fn print_child_status(&self, s: Status) {
+        match s {
+            Status::Exited(code) => println!("Child existed (status {})", code),
+            Status::Stopped(sig, rip) => {
+                println!("Child stopped (signal: {})", sig);
+                if let (Some(line), Some(func_name)) = (
+                    DwarfData::get_line_from_addr(&self.debug_data, rip),
+                    DwarfData::get_function_from_addr(&self.debug_data, rip),
+                ) {
+                    println!("Stopped at {}", line);
+                    println!("Inside function {}", func_name);
+                    self.print_nearby_line(line.number);
+                    self.debug_data
+                        .print_local_variable_from_func(None, &func_name)
+                }
+            }
+            Status::Signaled(sig) => {
+                println!("Program stopped due to signal {}", sig)
             }
         }
     }
