@@ -170,7 +170,6 @@ impl Inferior {
             base_ptr = ptrace::read(self.pid(), base_ptr as ptrace::AddressType)? as usize;
         }
 
-        // println!("at fucntion: {}. In {}", func_name, addr);
 
         Ok(())
     }
