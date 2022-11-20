@@ -1,9 +1,3 @@
-//! This file contains code for using gimli to extract information from the DWARF section of an
-//! executable. The code is adapted from
-//! https://github.com/gimli-rs/gimli/blob/master/examples/simple.rs and
-//! https://github.com/gimli-rs/gimli/blob/master/examples/dwarfdump.rs.
-//!
-//! This code is a huge mess. Please don't read it unless you're trying to do an extension :)
 
 use gimli;
 use gimli::{UnitOffset, UnitSectionOffset};
@@ -23,8 +17,8 @@ pub fn load_file(object: &object::File, endian: gimli::RunTimeEndian) -> Result<
             .section_data_by_name(id.name())
             .unwrap_or(borrow::Cow::Borrowed(&[][..])))
     };
-    // Load a supplementary section. We don't have a supplementary object file,
-    // so always return an empty slice.
+    // Load a supplementary section.
+    // Always return an empty slice.
     let load_section_sup = |_| Ok(borrow::Cow::Borrowed(&[][..]));
 
     // Load all of the sections.
@@ -90,11 +84,9 @@ pub fn load_file(object: &object::File, endian: gimli::RunTimeEndian) -> Result<
                         {
                             byte_size
                         } else {
-                            // TODO: report error?
                             0
                         }
                     } else {
-                        // TODO: report error?
                         0
                     };
                     let type_offset = entry.offset().0;
@@ -225,7 +217,7 @@ pub fn load_file(object: &object::File, endian: gimli::RunTimeEndian) -> Result<
                         .iter_mut()
                         .find(|f| f.name == path.as_os_str().to_str().unwrap());
 
-                    // Determine line/column. DWARF line/column is never 0, so we use that
+                    // Determine line/column. DWARF line/column is never 0, so use that
                     // but other applications may want to display this differently.
                     let line = row.line().unwrap_or(0);
 
@@ -319,7 +311,6 @@ fn get_attr_value<R: Reader>(
     dwarf: &gimli::Dwarf<R>,
 ) -> Result<DebugValue, Error> {
     let value = attr.value();
-    // TODO: get rid of w eventually
     let mut buf = String::new();
     let w = &mut buf;
     match value {

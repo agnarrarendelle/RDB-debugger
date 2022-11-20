@@ -11,6 +11,7 @@ use std::os::unix::process::CommandExt;
 use std::process::Child;
 use std::process::Command;
 
+//Status of the child process
 pub enum Status {
     /// Indicates inferior stopped. Contains the signal that stopped the process, as well as the
     /// current instruction pointer that it is stopped at.
@@ -24,8 +25,9 @@ pub enum Status {
     Signaled(signal::Signal),
 }
 
-/// This function calls ptrace with PTRACE_TRACEME to enable debugging on a process. You should use
-/// pre_exec with Command to call this in the child process.
+/// This function calls ptrace with PTRACE_TRACEME to enable debugging on a process.  
+/// Use with pre_exec to call this in the child process.
+
 fn child_traceme() -> Result<(), std::io::Error> {
     ptrace::traceme().or(Err(std::io::Error::new(
         std::io::ErrorKind::Other,
@@ -55,11 +57,14 @@ impl Inferior {
             cmd.pre_exec(child_traceme);
         }
 
+        //Set the inferior for the child process
         let mut inferior = Inferior {
             child: cmd.spawn().ok()?,
         };
 
+        //Calls wait on child to get its status(non-blocking)
         let status = inferior.wait(None).ok()?;
+        //If child is stopped, write the breakpoints addresses into into its address space
         if let Status::Stopped(signal, _rip) = status {
             if let signal::Signal::SIGTRAP = signal {
                 let brks = breakpoints.clone();
@@ -83,18 +88,33 @@ impl Inferior {
         None
     }
 
+    //Resume to child process from breakpoints
+    //This is a little bit complicated
+    //First of all, when the breakpopints is written into child's address space, 
+    //the original instruction at that address would be overwritten and lost,
+    //so we need to keep track of all the instructions overwritten and their location
+    //Second, when the program counter(%rip) is about the resume from the breakpoint instruction,
+    //we need to replace the breakpoint instruction with the original instruction
+    //so that the next time the next instruction to be executed is the original instruction
+    //Last, after the second step, we need to set the program counter(%rip) to the precious insturction
+    //so that it can resume execution as if nothing had happened at all 
     pub fn cont(&mut self, breakpoints: &HashMap<usize, Breakpoint>) -> Result<Status, nix::Error> {
         let mut registers = ptrace::getregs(self.pid())?;
+        //program counter(PC)
         let rip = registers.rip as usize;
+        //address of the instruciton that interrupts the child
         let interrupted_instru_addr = rip-1;
         if let Some(breakpoint) = breakpoints.get(&interrupted_instru_addr){
+            //write the original instruction back
             self.write_byte(breakpoint.addr, breakpoint.orig_byte)?;
-
+            //set the program counter to previous instruction
             registers.rip = interrupted_instru_addr as u64;
             ptrace::setregs(self.pid(), registers)?;
 
+            //resume the execution of the child
             ptrace::step(self.pid(), None)?;
 
+            //return the status of the child
             self.wait(None)?;
 
         }
@@ -131,6 +151,8 @@ impl Inferior {
         }
     }
 
+    //Print the call stack backtrace
+    //we need two registers: program counter register and current stack frame register
     pub fn print_backtrace(&self, debug_data: &DwarfData) -> Result<(), nix::Error> {
         let registers = ptrace::getregs(self.pid())?;
         let mut instruction_ptr = registers.rip as usize;
