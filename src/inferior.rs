@@ -158,8 +158,14 @@ impl Inferior {
         let mut instruction_ptr = registers.rip as usize;
         let mut base_ptr = registers.rbp as usize;
         loop {
-            let addr = DwarfData::get_line_from_addr(debug_data, instruction_ptr).unwrap();
-            let func_name = DwarfData::get_function_from_addr(debug_data, instruction_ptr).unwrap();
+            let addr = DwarfData::get_line_from_addr(debug_data, instruction_ptr);
+            let func_name = DwarfData::get_function_from_addr(debug_data, instruction_ptr);
+            if(addr.is_none() || func_name.is_none()){
+                println!("address and function name unavailable");
+                break;
+            }
+            let addr = addr.unwrap();
+            let func_name = func_name.unwrap();
             println!("at fucntion: {}. In {}", func_name, addr);
             if func_name == "main" {
                 break;
