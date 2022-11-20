@@ -45,4 +45,4 @@ q
 ## TODO
 
 1. print the value of variables
-   - When the program is compiled, only the value of global/static variables are stored at a fixed location in the final executable(Please refer to ELF format for more details). and the value of local variables are not determined until runtime where the the stack frames of the functions where local variables are declared are created. Hence, it makes it more difficult to obtain the values for the variables as the debugger is not able to directly access them from the final executable and has to wait until the program is being run
+   - When the program is compiled, only the value of global/static variables are stored at a fixed location in the final executable(Please refer to [ELF](https://en.wikipedia.org/wiki/Executable_and_Linkable_Format) format for more details). and the value of local variables are not determined until runtime where the the stack frames of the functions where local variables are declared are created. Hence, it makes it more difficult to obtain the values for the variables as the debugger is not able to directly access them from the final executable and has to wait until the program is being run
