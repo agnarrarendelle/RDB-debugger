@@ -20,7 +20,7 @@ r <optional arguments to your C program>
 2. Set breakpoints:
 
 ```
-   br <address, line number or function name in your C program>
+br <address, line number or function name in your C program>
 ```
 
 3. Pause the debugger: `ctrl + c`
